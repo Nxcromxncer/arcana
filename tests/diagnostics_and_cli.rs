@@ -70,7 +70,7 @@ fn check_reports_syntax_error() {
 fn check_accepts_valid_examples() {
     for name in [
         "hello", "mana", "spells", "trials", "inputs", "lib", "imports", "use_lib", "fizzbuzz", "inventory", "closures", "guess",
-        "safe_math", "wordcount", "factorial", "sum_input",
+        "safe_math", "wordcount", "factorial", "sum_input", "stats", "text_tools", "dates", "files", "cli_args",
     ] {
         let path = format!("examples/{}.arc", name);
         let src = std::fs::read_to_string(&path).unwrap();
@@ -100,7 +100,7 @@ fn cli_exit_codes() {
     assert_eq!(arcana(&["check", bad.to_str().unwrap()]).status.code(), Some(1));
     let o = arcana(&["version"]);
     assert_eq!(o.status.code(), Some(0));
-    assert!(out(&o).contains("Arcana 0.1.0"));
+    assert!(out(&o).contains("Arcana 1.0.0"));
     assert_eq!(arcana(&[]).status.code(), Some(2));
     assert_eq!(arcana(&["bogus"]).status.code(), Some(2));
 }
@@ -212,4 +212,20 @@ fn documented_examples_produce_documented_output() {
     assert!(run("guess", "abc\n3\n9\n7\n").ends_with("Correct! It took 3 tries.\n"));
     assert!(run("sum_input", "10\n20\nabc\n5\n\n").ends_with("sum of 3 numbers = 35\n"));
     assert_eq!(run("imports", ""), "1.0\n42\n8\n");
+    assert_eq!(
+        run("stats", ""),
+        "count:   6\nsum:     490\nmean:    81.67\nmin/max: 61 / 95\nsorted:  [95, 95, 88, 79, 72, 61]\nunique:  [72, 95, 88, 61, 79]\nstd dev: 12.405\nhex of the top score: 0x5f\n"
+    );
+    assert_eq!(
+        run("text_tools", ""),
+        "[the QUICK brown   fox]\nThe Quick Brown Fox\nthe_QUICK_brown___fox\n00000042\nname......|\n=-=-=-=-=-=-=-=-=-=-\n10\nOn\nanacra\n"
+    );
+    assert_eq!(
+        run("dates", ""),
+        "Tuesday, 27 October 2026\nday 300 of the year\ndeadline: 2026-12-11 (Friday)\ndays left: 45\nJan 31 + 1 month = 2026-02-28\nTue Nov  3, 09:30 AM\n2026-11-04T21:30:00\n-1\nOn\n1970-01-01T00:00:00\n"
+    );
+    assert_eq!(
+        run("files", ""),
+        "[\"write docs\", \"ship 1.0\", \"celebrate\"]\nsize: 30 bytes\n[\"todo.txt\"]\nFileError (E2012)\nOff\n"
+    );
 }

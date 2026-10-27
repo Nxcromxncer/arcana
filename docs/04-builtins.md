@@ -1,20 +1,29 @@
 # 4. Built-in spells
 
-Built-ins are ordinary spell values that are always in scope. Calling one with
-the wrong number of arguments is `E3004`; the wrong argument type is `E3003`
-(unless noted). The error always points at the call in your code.
+Built-ins are ordinary spell values that are **always in scope**: no `import`
+needed. Calling one with the wrong number of arguments is `E3004`; the wrong
+argument type is `E3003` (unless noted). The error always points at the call in
+your code.
+
+Arcana 1.0 also has ten [standard modules](08-standard-library.md) (`math`, `text`,
+`list`, `date`, ...) that you `import` when you need more.
 
 | Group      | Spells                                                        |
 |------------|---------------------------------------------------------------|
 | Input      | [`ask`](#ask) [`ask_integer`](#ask_integer) [`ask_decimal`](#ask_decimal) |
-| Conversion | [`text`](#text) [`integer`](#integer) [`decimal`](#decimal) [`round`](#round) |
+| Conversion | [`to_text`](#text) [`to_integer`](#integer) [`to_decimal`](#decimal) [`to_number`](#to_number) [`round`](#round) |
 | Numbers    | [`abs`](#abs) [`min`](#min--max) [`max`](#min--max)          |
 | Collections| [`length`](#length) [`range`](#range) [`append`](#append) [`pop`](#pop) [`keys`](#keys) [`values`](#values) [`copy`](#copy) |
 | Text       | [`upper`](#upper--lower) [`lower`](#upper--lower) [`split`](#split) [`join`](#join) |
-| Other      | [`type_of`](#type_of) [`fail`](#fail)                        |
+| Other      | [`type_of`](#type_of) [`fail`](#fail) [`assert`](#assert)    |
 
 You may shadow a built-in with your own `bind` (for example `bind length = 3`),
 but you cannot assign to a built-in name.
+
+> **1.0 naming.** The conversion spells are now spelled `to_text`, `to_integer`,
+> `to_decimal` (and the new `to_number`). The 0.1 names `text`, `integer` and
+> `decimal` keep working forever, but prefer the `to_` names: `import text` hides
+> the old `text(x)`, while `to_text(x)` is never affected.
 
 ---
 
@@ -53,12 +62,13 @@ are rejected with `E2010`.
 ## Conversion
 
 ### `text`
-`text(x)` returns **text**. Converts any value to the text `cast` would print.
+`to_text(x)` (also spelled `text(x)`) returns **text**. Converts any value to the text
+`cast` would print.
 
 ```arc
 spell main() {
-    cast text(42) + "!"        ? 42!
-    cast text([1, "a", On])    ? [1, "a", On]
+    cast to_text(42) + "!"        ? 42!
+    cast to_text([1, "a", On])    ? [1, "a", On]
 }
 ```
 
@@ -66,7 +76,7 @@ Nested text inside lists and maps is shown with quotes; top-level text is return
 unchanged.
 
 ### `integer`
-`integer(x)` returns an **integer**.
+`to_integer(x)` (also spelled `integer(x)`) returns an **integer**.
 
 | Argument           | Result                                                         |
 |--------------------|----------------------------------------------------------------|
@@ -78,14 +88,23 @@ unchanged.
 | anything else      | `E3003`                                                        |
 
 ### `decimal`
-`decimal(x)` returns a **decimal**. Accepts integers (`decimal(3)` is `3.0`),
+`to_decimal(x)` (also spelled `decimal(x)`) returns a **decimal**. Accepts integers (`decimal(3)` is `3.0`),
 decimals and numeric text (`"2.5"`). Bad text is `E2011`; an integer too large for
 a decimal is `E2008`.
+
+### `to_number`
+`to_number(x)` returns an **integer or a decimal**. A number is returned unchanged;
+text such as `"25"` gives the integer `25` and `"2.5"` gives the decimal `2.5`. Text
+that is not a number is `E2011` (catchable); use `convert.parse_number` to get `null`
+instead of an error.
 
 ### `round`
 `round(x)` returns an **integer**. Rounds to the nearest whole number, with halves
 rounded **away from zero**: `round(2.5)` is `3`, `round(-2.5)` is `-3`,
 `round(2.4)` is `2`. An integer is returned unchanged. Non-numbers are `E3003`.
+
+`round(x, digits)` rounds to `digits` decimal places (0 to 15, else `E2006`) and
+always returns a **decimal**: `round(3.14159, 2)` is `3.14`, `round(5, 2)` is `5.0`.
 
 ---
 
@@ -210,7 +229,7 @@ spells) or `grimoire`.
 
 ### `fail`
 `fail(message)` raises a catchable `E2100` error of kind `UserError`. The message
-is converted with `text()`. If nothing catches it, the program stops and prints
+is converted with `to_text()`. If nothing catches it, the program stops and prints
 the diagnostic.
 
 ```arc
@@ -229,3 +248,30 @@ spell main() {
     }
 }
 ```
+
+### `assert`
+`assert(condition)` or `assert(condition, message)` does nothing when the condition
+is `On`. When it is `Off` it raises a catchable `E2101` error of kind
+`AssertionError` with the message (default `Assertion failed`). The condition must be
+a boolean (`E3003` otherwise): there is no truthiness.
+
+```arc
+spell main() {
+    assert(1 + 1 == 2)
+    try {
+        assert(length([]) > 0, "the list must not be empty")
+    } catch e {
+        cast e["kind"] + ": " + e["message"]
+    }
+}
+```
+
+```
+AssertionError: the list must not be empty
+```
+
+## More spells: the standard modules
+
+Sorting (`sort`, `sorted`), searching (`find`, `index_of`), `trim`, `replace`, `sqrt`,
+`floor`, file access, dates and much more live in the
+[standard library](08-standard-library.md).

@@ -25,7 +25,7 @@ pub fn run_with(src: &str, stdin: &str, max_depth: usize, max_steps: Option<i64>
         .stack_size(256 << 20)
         .spawn(move || {
             let buf = SharedBuf::default();
-            let opts = Options { max_steps, max_depth, search_paths: vec![] };
+            let opts = Options { max_steps, max_depth, ..Options::default() };
             let mut it = Interpreter::with_io(Box::new(buf.clone()), Box::new(std::io::Cursor::new(stdin.into_bytes())), opts);
             match it.run_source(&src, "test.arc", true) {
                 Ok(_) => Ok(String::from_utf8(buf.0.borrow().clone()).unwrap()),
@@ -62,4 +62,42 @@ pub fn main_body_in(body: &str, stdin: &str) -> String {
 
 pub fn body_error(body: &str) -> Box<ArcanaError> {
     error_of(&wrap(body))
+}
+
+/// Run a program capturing stdout, stderr (`warn`/`debug`) and returning program arguments.
+pub fn run_full(src: &str, stdin: &str, args: &[&str]) -> (Result<String, Box<ArcanaError>>, String) {
+    let (src, stdin) = (src.to_string(), stdin.to_string());
+    let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+    std::thread::Builder::new()
+        .stack_size(256 << 20)
+        .spawn(move || {
+            let (out, err) = (SharedBuf::default(), SharedBuf::default());
+            let opts = Options { max_depth: 100, args, ..Options::default() };
+            let mut it = Interpreter::with_io(Box::new(out.clone()), Box::new(std::io::Cursor::new(stdin.into_bytes())), opts);
+            it.set_err(Box::new(err.clone()));
+            let r = it.run_source(&src, "test.arc", true);
+            let stdout = String::from_utf8(out.0.borrow().clone()).unwrap();
+            let stderr = String::from_utf8(err.0.borrow().clone()).unwrap();
+            (r.map(|_| stdout), stderr)
+        })
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+/// `import`s every standard module under its own name, then runs `body` inside `main`.
+pub fn std_body(body: &str) -> String {
+    let src = format!(
+        "import math\nimport text as t\nimport list as l\nimport logic\nimport convert as c\nimport error as err\nimport system\nimport file\nimport time\nimport date\nspell main() {{\n{}\n}}\n",
+        body
+    );
+    run(&src)
+}
+
+pub fn std_error(body: &str) -> Box<ArcanaError> {
+    let src = format!(
+        "import math\nimport text as t\nimport list as l\nimport logic\nimport convert as c\nimport error as err\nimport system\nimport file\nimport time\nimport date\nspell main() {{\n{}\n}}\n",
+        body
+    );
+    error_of(&src)
 }

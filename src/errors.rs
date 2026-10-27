@@ -33,6 +33,8 @@ pub struct ArcanaError {
     pub recoverable: bool,
     pub filename: Option<String>,
     pub source: Option<Arc<str>>,
+    /// Set by `system.exit(code)`: stops the program quietly with this exit status.
+    pub exit_code: Option<i32>,
 }
 
 impl ArcanaError {
@@ -48,6 +50,7 @@ impl ArcanaError {
             recoverable: false,
             filename: None,
             source: None,
+            exit_code: None,
         }
     }
 
@@ -70,6 +73,11 @@ impl ArcanaError {
     pub fn recoverable(mut self, kind: &str) -> Self {
         self.recoverable = true;
         self.kind = kind.to_string();
+        self
+    }
+
+    pub fn with_exit_code(mut self, code: i32) -> Self {
+        self.exit_code = Some(code);
         self
     }
 

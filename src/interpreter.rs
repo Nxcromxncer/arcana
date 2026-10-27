@@ -6,7 +6,9 @@ use crate::errors::{name_help, ArcanaError, Span};
 use crate::int::Int;
 use crate::lexer::normalize;
 use crate::parser::parse_source;
-use crate::runtime::{make_builtins, BuiltinId};
+use crate::errors::close_match;
+use crate::runtime::make_builtins;
+use crate::stdlib;
 use crate::values::*;
 use std::collections::HashMap;
 use std::io::{BufRead, IsTerminal, Write};
@@ -34,17 +36,23 @@ pub struct Options {
     pub max_steps: Option<i64>,
     pub max_depth: usize,
     pub search_paths: Vec<PathBuf>,
+    /// Command-line arguments passed to the program (see `system.args()`).
+    pub args: Vec<String>,
 }
 
 impl Default for Options {
     fn default() -> Options {
-        Options { max_steps: None, max_depth: 1000, search_paths: Vec::new() }
+        Options { max_steps: None, max_depth: 1000, search_paths: Vec::new(), args: Vec::new() }
     }
 }
 
 pub struct Interpreter {
     pub(crate) out: Box<dyn Write>,
     pub(crate) inp: Box<dyn BufRead>,
+    pub(crate) err_out: Box<dyn Write>,
+    pub(crate) prog_args: Vec<String>,
+    rng: u64,
+    started: std::time::Instant,
     max_steps: Option<i64>,
     max_depth: usize,
     search_paths: Vec<PathBuf>,
@@ -71,8 +79,8 @@ fn abspath(p: &Path) -> PathBuf {
     out
 }
 
-fn overflow(span: Span, interp: &Interpreter) -> Box<ArcanaError> {
-    interp.err("E2008", "Numeric overflow: the result is too large", Some(span)).recoverable("MathError").boxed()
+fn overflow(span: Option<Span>, interp: &Interpreter) -> Box<ArcanaError> {
+    interp.err("E2008", "Numeric overflow: the result is too large", span).recoverable("MathError").boxed()
 }
 
 fn float_floor_div(vx: f64, wx: f64) -> f64 {
@@ -125,9 +133,18 @@ impl Interpreter {
         }
         let builtin_env = Env::new_builtin();
         make_builtins(&builtin_env);
+        let seed = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0x5eed)
+            ^ ((std::process::id() as u64) << 32);
         Interpreter {
             out,
             inp,
+            err_out: Box::new(std::io::stderr()),
+            prog_args: opts.args.clone(),
+            rng: seed,
+            started: std::time::Instant::now(),
             max_steps: opts.max_steps,
             max_depth: opts.max_depth,
             search_paths,
@@ -142,6 +159,31 @@ impl Interpreter {
 
     pub fn flush(&mut self) {
         let _ = self.out.flush();
+    }
+
+    /// Redirect what `warn()` / `debug()` write (stderr by default); used by tests.
+    pub fn set_err(&mut self, w: Box<dyn Write>) {
+        self.err_out = w;
+    }
+
+    pub(crate) fn next_u64(&mut self) -> u64 {
+        self.rng = self.rng.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = self.rng;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+
+    pub(crate) fn next_f64(&mut self) -> f64 {
+        (self.next_u64() >> 11) as f64 / (1u64 << 53) as f64
+    }
+
+    pub(crate) fn seed_rng(&mut self, seed: u64) {
+        self.rng = seed;
+    }
+
+    pub(crate) fn elapsed_secs(&self) -> f64 {
+        self.started.elapsed().as_secs_f64()
     }
 
     // ---- errors ----------------------------------------------------------------
@@ -488,7 +530,29 @@ impl Interpreter {
         (None, dirs)
     }
 
+    fn std_module(&mut self, name: &str) -> Option<Rc<ModuleValue>> {
+        let key = format!("std:{}", name);
+        if let Some(m) = self.modules.get(&key) {
+            return Some(m.clone());
+        }
+        let m = stdlib::build_module(name)?;
+        self.modules.insert(key, m.clone());
+        Some(m)
+    }
+
+    fn missing_name(&self, m: &ModuleValue, name: &str, span: Span) -> Box<ArcanaError> {
+        let candidates = m.env.local_names();
+        let help = match close_match(name, &candidates, 0.6) {
+            Some(c) => format!("did you mean '{}'?", c),
+            None => "check the spelling of the name in that grimoire".to_string(),
+        };
+        self.err("E5003", format!("Grimoire '{}' has no name '{}'", m.name, name), Some(span)).help(help).boxed()
+    }
+
     fn load_module(&mut self, dotted: &str, span: Span) -> R<Rc<ModuleValue>> {
+        if let Some(m) = self.std_module(dotted) {
+            return Ok(m);
+        }
         let base = self.module_stack.last().map(|m| m.base_dir.clone()).unwrap_or_default();
         let (path, dirs) = self.find_module(dotted, &base);
         let path = match path {
@@ -556,12 +620,7 @@ impl Interpreter {
                 for (name, nspan) in list {
                     let v = match m.env.get_local(name) {
                         Some(v) => v,
-                        None => {
-                            return Err(self
-                                .err("E5003", format!("Grimoire '{}' has no name '{}'", module, name), Some(*nspan))
-                                .help("check the spelling of the name in that grimoire")
-                                .boxed())
-                        }
+                        None => return Err(self.missing_name(&m, name, *nspan)),
                     };
                     self.declare(env, name, v, *nspan)?;
                 }
@@ -623,9 +682,7 @@ impl Interpreter {
                 match &o {
                     Value::Module(m) => match m.env.get_local(name) {
                         Some(v) => Ok(v),
-                        None => Err(self
-                            .err("E5003", format!("Grimoire '{}' has no name '{}'", m.name, name), Some(*span))
-                            .boxed()),
+                        None => Err(self.missing_name(m, name, *span)),
                     },
                     other => Err(self
                         .err("E3003", format!("A {} has no members", type_name(other)), Some(*span))
@@ -723,15 +780,15 @@ impl Interpreter {
                     .help("'<' and '>' work on two numbers or two texts")
                     .boxed()),
             },
-            _ => self.arith(op, left, right, span),
+            _ => self.arith(op, left, right, Some(span)),
         }
     }
 
-    fn math_err(&self, code: &str, msg: &str, span: Span) -> Box<ArcanaError> {
-        self.err(code, msg, Some(span)).recoverable("MathError").boxed()
+    fn math_err(&self, code: &str, msg: &str, span: Option<Span>) -> Box<ArcanaError> {
+        self.err(code, msg, span).recoverable("MathError").boxed()
     }
 
-    fn arith(&mut self, op: BinOp, a: &Value, b: &Value, span: Span) -> R<Value> {
+    pub(crate) fn arith(&mut self, op: BinOp, a: &Value, b: &Value, span: Option<Span>) -> R<Value> {
         if op == BinOp::Add {
             if let (Value::Text(x), Value::Text(y)) = (a, b) {
                 let mut s = String::with_capacity(x.len() + y.len());
@@ -744,7 +801,7 @@ impl Interpreter {
             let mut e = self.err(
                 "E3003",
                 format!("Cannot use '{}' with {} and {}", op.symbol(), type_name(a), type_name(b)),
-                Some(span),
+                span,
             );
             if op == BinOp::Add && (matches!(a, Value::Text(_)) || matches!(b, Value::Text(_))) {
                 e = e.help("use text(value) to convert a value to text before joining");
@@ -759,7 +816,7 @@ impl Interpreter {
                 BinOp::Div | BinOp::FloorDiv | BinOp::Mod => {
                     if y.is_zero() {
                         return Err(self
-                            .err("E2001", "Division by zero", Some(span))
+                            .err("E2001", "Division by zero", span)
                             .recoverable("MathError")
                             .help("check that the divisor is not 0 first")
                             .boxed());
@@ -796,7 +853,7 @@ impl Interpreter {
             BinOp::Div | BinOp::FloorDiv | BinOp::Mod => {
                 if y == 0.0 {
                     return Err(self
-                        .err("E2001", "Division by zero", Some(span))
+                        .err("E2001", "Division by zero", span)
                         .recoverable("MathError")
                         .help("check that the divisor is not 0 first")
                         .boxed());
@@ -816,7 +873,7 @@ impl Interpreter {
         Ok(Value::Dec(r))
     }
 
-    fn float_pow(&self, x: f64, y: f64, span: Span) -> R<f64> {
+    fn float_pow(&self, x: f64, y: f64, span: Option<Span>) -> R<f64> {
         if x == 0.0 && y < 0.0 {
             return Err(self.math_err("E2001", "Zero cannot be raised to a negative power", span));
         }
@@ -826,7 +883,7 @@ impl Interpreter {
         Ok(x.powf(y))
     }
 
-    fn int_pow(&self, a: &Int, b: &Int, span: Span) -> R<Value> {
+    fn int_pow(&self, a: &Int, b: &Int, span: Option<Span>) -> R<Value> {
         if b.is_pos() && a.abs() > Int::Small(1) {
             let bits = a.bit_length() as u128;
             let too_big = match b.to_i64() {
@@ -962,8 +1019,8 @@ impl Interpreter {
                 if n < b.min_args || b.max_args.map_or(false, |m| n > m) {
                     return Err(self.arity_error(b.name, b.min_args, b.max_args, n, span, &format!("{}(...)", b.name)));
                 }
-                let id: BuiltinId = b.id;
-                match self.call_builtin(id, args) {
+                let func = b.func;
+                match func(self, &args) {
                     Ok(v) => Ok(v),
                     Err(mut e) => {
                         if e.span.is_none() {
@@ -973,6 +1030,18 @@ impl Interpreter {
                         Err(e)
                     }
                 }
+            }
+            Value::Module(m) => {
+                let mut e = self
+                    .err("E3005", format!("Cannot call a value of type {}", type_name(callee)), span)
+                    .help(format!("'{}' is an imported grimoire; call its functions as {}.name(...)", m.name, m.name));
+                if crate::runtime::is_builtin(&m.name) {
+                    e = e.note(format!(
+                        "this import hides the built-in spell '{}'; import the grimoire under another name: import {} as x",
+                        m.name, m.name
+                    ));
+                }
+                Err(e.boxed())
             }
             other => Err(self
                 .err("E3005", format!("Cannot call a value of type {}", type_name(other)), span)

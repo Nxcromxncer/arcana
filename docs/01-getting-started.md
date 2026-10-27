@@ -14,7 +14,7 @@ Check that it worked:
 
 ```
 which arcana          # /home/<you>/.local/bin/arcana
-arcana version        # Arcana 0.1.0
+arcana version        # Arcana 1.0.0
 ```
 
 If `arcana` is not found, add `~/.local/bin` to your `PATH`
@@ -61,7 +61,7 @@ What happened:
 ## The commands
 
 ```
-arcana run <file.arc> [--max-steps N] [--max-depth N]
+arcana run <file.arc> [args...] [--max-steps N] [--max-depth N]
 arcana check <file.arc>
 arcana tokens <file.arc>
 arcana version
@@ -75,7 +75,8 @@ Runs the grimoire. Input for `ask()` is read from the terminal, or from a pipe:
 printf 'Mira\n41\n' | arcana run examples/inputs.arc
 ```
 
-Two safety limits are available:
+Anything after the file name is passed to the program (see
+[program arguments](#program-arguments)). Two safety limits are available:
 
 | Option            | Meaning                                                   | Default |
 |-------------------|-----------------------------------------------------------|---------|
@@ -87,6 +88,30 @@ Two safety limits are available:
 ```
 arcana run loop.arc --max-steps 100000
 ```
+
+### Program arguments
+
+Words after the grimoire's name are handed to the program, which reads them with
+`system.args()`:
+
+```arc
+import system
+
+spell main() {
+    cast system.args()
+}
+```
+
+```
+$ arcana run args.arc Mira 3
+["Mira", "3"]
+$ arcana run args.arc -- --max-steps 5     # after `--`, arcana ignores the rest
+["--max-steps", "5"]
+```
+
+Arcana's own options (`--max-steps`, `--max-depth`) are recognised anywhere before
+a `--`. A program can end with a chosen status using `system.exit(code)`.
+`examples/cli_args.arc` shows a complete command-line program.
 
 ### `arcana check`
 
@@ -126,6 +151,7 @@ Note that the comment does not appear: the lexer drops it.
 | 0    | Success                                                              |
 | 1    | Arcana diagnostic (syntax, type, runtime or import error)            |
 | 2    | Usage problem or the file could not be read                          |
+| 0-255 | whatever the program passes to `system.exit(code)`                  |
 
 This makes Arcana easy to use in shell scripts:
 
@@ -176,6 +202,29 @@ export ARCANA_PATH="$HOME/arcana-libs:$HOME/more-libs"
 
 See the [language reference](03-language-reference.md#modules-import) for the
 full rules.
+
+## The standard library
+
+Besides your own grimoires, Arcana ships ten standard modules (`math`, `text`, `list`,
+`logic`, `convert`, `error`, `system`, `file`, `time`, `date`). They need no
+installation:
+
+```arc
+import math
+import date
+
+spell main() {
+    cast math.sqrt(144)
+    cast date.format(date.make_date(2026, 10, 27), "%A")
+}
+```
+
+```
+12.0
+Tuesday
+```
+
+See [Standard library](08-standard-library.md) for every function.
 
 ## Suggested workflow
 

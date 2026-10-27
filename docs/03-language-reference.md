@@ -1,6 +1,6 @@
 # 3. Language reference
 
-The precise rules of Arcana 0.1. For a friendlier introduction read the
+The precise rules of Arcana 1.0. For a friendlier introduction read the
 [language tour](02-language-tour.md) first.
 
 Contents: [Source files](#source-files) - [Lexical structure](#lexical-structure) -
@@ -277,7 +277,7 @@ spell name(required, optional = default_expr) {
 * Nested spells capture the scope they were declared in (closures) and can modify
   the variables there.
 * Built-in spells check their own argument counts and types, reported as `E3004`
-  and `E3003`.
+  and `E3003`. This includes the ones in the standard modules.
 
 ## Scope
 
@@ -302,6 +302,12 @@ import pkg.deep as d       ? pkg/deep.arc     -> use d.name
 from lib import a, b       ? names copied into this file's scope
 ```
 
+* The ten **standard modules** (`math`, `text`, `list`, `logic`, `convert`, `error`,
+  `system`, `file`, `time`, `date`) are built into the interpreter. `import math`
+  loads the standard module, and a standard module **always wins** over a file with
+  the same name. See [Standard library](08-standard-library.md).
+* `import text` hides the built-in `text(x)` in that file (use `to_text(x)`); calling
+  the hidden name reports `E3005` with a note explaining the cause.
 * `a.b.c` maps to the path `a/b/c.arc`.
 * The file is looked up next to the importing file first, then in every directory
   of the `ARCANA_PATH` environment variable. Not found: `E5001`; the diagnostic
@@ -324,7 +330,10 @@ from lib import a, b       ? names copied into this file's scope
    evaluated, `spell`s are created.
 3. `main()` is called with no arguments. If it does not exist, `E2004`.
 4. An uncaught error prints a diagnostic to standard error and ends the process
-   with exit code 1.
+   with exit code 1. `system.exit(code)` ends it immediately and quietly with
+   that code instead (`finally` blocks still run; `catch` cannot intercept it).
+
+Command-line words after the grimoire name are available through `system.args()`.
 
 Top level may contain only `import`, `spell` and `bind`. Anything else is `E4002`
 ("put this statement inside spell main").

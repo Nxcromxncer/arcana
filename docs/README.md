@@ -17,7 +17,8 @@ spell main() {
 | Install Arcana and run your first program           | [1. Getting started](01-getting-started.md)            |
 | Learn the language step by step                     | [2. Language tour](02-language-tour.md)                |
 | Look up exact syntax, operators and rules           | [3. Language reference](03-language-reference.md)      |
-| Look up a built-in spell (`length`, `split`, ...)   | [4. Built-in spells](04-builtins.md)                   |
+| Look up an always-available spell (`length`, `range`, ...) | [4. Built-in spells](04-builtins.md)             |
+| Use `math`, `text`, `list`, `date`, `file`, ...      | [8. Standard library](08-standard-library.md)          |
 | Understand an error message or catch errors         | [5. Errors and debugging](05-errors-and-debugging.md)  |
 | Copy working programs for common tasks              | [6. Cookbook](06-cookbook.md)                          |
 | Change the interpreter itself                       | [7. Internals](07-internals.md)                        |
@@ -41,6 +42,9 @@ These are the rules that most often surprise people coming from other languages.
    cannot; fix the code instead.
 9. **`count`, `repeat` and `times` are reserved words**, so they cannot be used
    as variable names.
+10. **The standard library is imported, not global.** `import math` gives you
+    `math.sqrt`; only the core spells (`length`, `range`, `to_text`, ...) are always
+    available. `import text` hides the old `text(x)`, so prefer `to_text(x)`.
 
 ## Runnable examples
 

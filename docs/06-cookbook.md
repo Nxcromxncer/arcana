@@ -314,6 +314,208 @@ spell main() {
 8
 ```
 
+## Statistics with `math`, `list` and `convert`
+
+`examples/stats.arc`
+
+```arc
+import math
+import list
+import convert
+
+spell mean(items) {
+    return list.sum(items) / length(items)
+}
+
+spell main() {
+    bind scores = [72, 95, 88, 61, 95, 79]
+
+    cast "count:   " + to_text(length(scores))
+    cast "sum:     " + to_text(list.sum(scores))
+    cast "mean:    " + convert.format_number(mean(scores), 2)
+    cast "min/max: " + to_text(min(scores)) + " / " + to_text(max(scores))
+    cast "sorted:  " + to_text(list.sorted(scores, On))
+    cast "unique:  " + to_text(list.unique(scores))
+
+    bind variance = 0.0
+    for s in scores {
+        variance = variance + math.power(s - mean(scores), 2)
+    }
+    cast "std dev: " + convert.format_number(math.sqrt(variance / length(scores)), 3)
+    cast "hex of the top score: " + convert.to_hex(max(scores))
+}
+```
+
+```
+count:   6
+sum:     490
+mean:    81.67
+min/max: 61 / 95
+sorted:  [95, 95, 88, 79, 72, 61]
+unique:  [72, 95, 88, 61, 79]
+std dev: 12.405
+hex of the top score: 0x5f
+```
+
+## Cleaning up text with the `text` module
+
+`examples/text_tools.arc`
+
+```arc
+import text
+
+spell title_case(sentence) {
+    bind words = []
+    for w in text.split(sentence) {
+        append(words, upper(text.substring(w, 0, 1)) + lower(text.substring(w, 1)))
+    }
+    return join(words, " ")
+}
+
+spell main() {
+    bind raw = "   the QUICK brown   fox  "
+    bind clean = text.trim(raw)
+    cast "[" + clean + "]"
+    cast title_case(clean)
+    cast text.replace(clean, " ", "_")
+    cast text.pad_left(to_text(42), 8, "0")
+    cast text.pad_right("name", 10, ".") + "|"
+    cast text.repeat_text("=-", 10)
+    cast text.find(clean, "brown")
+    cast text.starts_with(clean, "the")
+    cast text.reverse_text("arcana")
+}
+```
+
+```
+[the QUICK brown   fox]
+The Quick Brown Fox
+the_QUICK_brown___fox
+00000042
+name......|
+=-=-=-=-=-=-=-=-=-=-
+10
+On
+anacra
+```
+
+Note `import text` hides the old built-in `text(x)`, so this program uses `to_text`.
+
+## Planning with dates
+
+`examples/dates.arc`
+
+```arc
+import date
+
+spell main() {
+    bind launch = date.make_date(2026, 10, 27)
+    cast date.format(launch, "%A, %d %B %Y")
+    cast "day " + to_text(date.day_of_year(launch)) + " of the year"
+
+    bind deadline = date.add_days(launch, 45)
+    cast "deadline: " + date.iso(deadline) + " (" + date.weekday_name(deadline) + ")"
+    cast "days left: " + to_text(date.diff_days(deadline, launch))
+
+    bind month_end = date.add_months(date.make_date(2026, 1, 31), 1)
+    cast "Jan 31 + 1 month = " + date.iso(month_end)
+
+    bind meeting = date.parse("2026-11-03 09:30")
+    cast date.format(meeting, "%a %b %e, %I:%M %p")
+    cast date.iso(date.add_hours(meeting, 36))
+
+    cast date.compare(launch, deadline)
+    cast date.is_leap_year(2028)
+    cast date.iso(date.from_timestamp(0))
+}
+```
+
+```
+Tuesday, 27 October 2026
+day 300 of the year
+deadline: 2026-12-11 (Friday)
+days left: 45
+Jan 31 + 1 month = 2026-02-28
+Tue Nov  3, 09:30 AM
+2026-11-04T21:30:00
+-1
+On
+1970-01-01T00:00:00
+```
+
+## Reading and writing files
+
+`examples/files.arc`
+
+```arc
+import file
+import list
+import system
+
+spell main() {
+    bind dir = "arcana_demo_files"
+    file.make_dir(dir)
+    bind path = dir + "/todo.txt"
+
+    file.write_lines(path, ["write docs", "ship 1.0"])
+    file.append_text(path, "celebrate\n")
+
+    cast file.read_lines(path)
+    cast "size: " + to_text(file.size(path)) + " bytes"
+    cast file.list_dir(dir)
+
+    try {
+        file.read_text(dir + "/missing.txt")
+    } catch e {
+        cast e["kind"] + " (" + e["code"] + ")"
+    }
+
+    file.remove(path)
+    file.remove(dir)
+    cast file.exists(dir)
+}
+```
+
+```
+["write docs", "ship 1.0", "celebrate"]
+size: 30 bytes
+["todo.txt"]
+FileError (E2012)
+Off
+```
+
+## A command-line program
+
+`examples/cli_args.arc`
+
+```arc
+import system
+
+spell main() {
+    bind args = system.args()
+    if length(args) == 0 {
+        cast "usage: arcana run cli_args.arc NAME [TIMES]"
+        system.exit(2)
+    }
+    bind rounds = 1
+    if length(args) > 1 {
+        rounds = to_integer(args[1])
+    }
+    for i in range(rounds) {
+        cast "Hello, " + args[0] + "! (" + to_text(i + 1) + "/" + to_text(rounds) + ")"
+    }
+}
+```
+
+```
+$ arcana run examples/cli_args.arc Mira 2
+Hello, Mira! (1/2)
+Hello, Mira! (2/2)
+$ arcana run examples/cli_args.arc ; echo "exit status: $?"
+usage: arcana run cli_args.arc NAME [TIMES]
+exit status: 2
+```
+
 ## Small recipes
 
 Each snippet goes inside `spell main() { ... }`.
@@ -377,6 +579,34 @@ if "mana" in hero { value = hero["mana"] }
 ```
 cast 7 // 2             ? 3    integer division
 cast round(2.5)         ? 3
-cast integer("42") + 1  ? 43
-cast decimal(1) / 3     ? 0.3333333333333333
+cast to_integer("42") + 1   ? 43
+cast to_decimal(1) / 3      ? 0.3333333333333333
+cast round(3.14159, 2)  ? 3.14
+```
+
+**Today's date and the time as text** (`import date`)
+
+```
+cast date.format(date.now(), "%Y-%m-%d %H:%M")
+```
+
+**Time how long something takes** (`import system`)
+
+```
+bind started = system.clock()
+? ... work ...
+cast "took " + to_text(system.clock() - started) + " seconds"
+```
+
+**Pick a random item** (`import list`, `import math`)
+
+```
+cast list.choice(["fireball", "frost", "ward"])
+cast math.random_int(1, 6)
+```
+
+**Sort a copy and keep the original** (`import list`)
+
+```
+bind ranked = list.sorted(scores, On)
 ```

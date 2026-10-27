@@ -14,7 +14,9 @@ use std::io::Write;
 const USAGE: &str = "usage: arcana <command> [options]
 
 commands:
-  run <file.arc> [--max-steps N] [--max-depth N]   run a grimoire (.arc file)
+  run <file.arc> [args...] [--max-steps N] [--max-depth N]
+                                                   run a grimoire; args are passed to the program
+                                                   (see system.args()); use -- to stop option parsing
   check <file.arc>                                 check a grimoire without running it
   tokens <file.arc>                                print the token stream
   version                                          print the version
@@ -85,6 +87,15 @@ fn cmd_run(args: &[String]) -> i32 {
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
+        // `--` ends option parsing: everything after it belongs to the program
+        if a == "--" {
+            if file.is_some() {
+                opts.args.extend(args[i + 1..].iter().cloned());
+                break;
+            }
+            i += 1;
+            continue;
+        }
         let (flag, inline): (&str, Option<&str>) = match a.split_once('=') {
             Some((f, v)) if f.starts_with("--") => (f, Some(v)),
             _ => (a.as_str(), None),
@@ -111,12 +122,14 @@ fn cmd_run(args: &[String]) -> i32 {
                     opts.max_depth = n.max(0) as usize;
                 }
             }
-            _ if a.starts_with("--") => return usage_error(&format!("unrecognized arguments: {}", a)),
+            _ if a.starts_with("--") && file.is_none() => return usage_error(&format!("unrecognized arguments: {}", a)),
+            // the first plain word is the grimoire; everything after it is passed to the program
             _ => {
-                if file.is_some() {
-                    return usage_error(&format!("unrecognized arguments: {}", a));
+                if file.is_none() {
+                    file = Some(a.clone());
+                } else {
+                    opts.args.push(a.clone());
                 }
-                file = Some(a.clone());
             }
         }
         i += 1;
@@ -138,6 +151,8 @@ fn cmd_run(args: &[String]) -> i32 {
     });
     match result {
         Some(Ok(())) => 0,
+        // system.exit(code): stop quietly with that status
+        Some(Err(e)) if e.exit_code.is_some() => e.exit_code.unwrap_or(0),
         Some(Err(e)) => {
             let _ = std::io::stdout().flush();
             eprintln!("{}", e.render());

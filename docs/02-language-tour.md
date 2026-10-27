@@ -358,6 +358,7 @@ spell main() {
 * You can raise your own error with `fail("message")` (kind `UserError`).
 * Only **runtime** errors (`E2xxx`) can be caught. Programmer mistakes such as an
   unknown name or adding text to a number are not catchable.
+* `assert(condition, message)` raises a catchable `AssertionError` (`E2101`).
 
 See `examples/safe_math.arc` and [Errors and debugging](05-errors-and-debugging.md).
 
@@ -380,7 +381,7 @@ raise a catchable `E2010` if it is not a number (or if input has ended).
 
 ## Splitting code across files
 
-```arc
+```
 import lib                  ? use as lib.name
 import tools.maps as m      ? file tools/maps.arc, used as m.name
 from lib import double      ? use as double(...)
@@ -389,8 +390,56 @@ from lib import double      ? use as double(...)
 Imports go at the top of the file. A grimoire is loaded only once, even if many
 files import it.
 
+## The standard library
+
+Ten ready-made modules cover everyday needs. They import exactly like your own files:
+
+```arc
+import math
+import text
+import list
+import date
+
+spell main() {
+    cast math.sqrt(144)                          ? 12.0
+    cast text.pad_left(to_text(7), 3, "0")       ? 007
+    bind scores = [30, 10, 20]
+    list.sort(scores)                            ? changes the list in place
+    cast scores
+    cast list.sum(scores)
+    cast date.format(date.make_date(2026, 10, 27), "%A, %d %B %Y")
+}
+```
+
+```
+12.0
+007
+[10, 20, 30]
+60
+Tuesday, 27 October 2026
+```
+
+| Module    | For |
+|-----------|-----|
+| `math`    | `sqrt`, `power`, `floor`, `ceil`, `clamp`, trigonometry, `random` |
+| `text`    | `trim`, `replace`, `substring`, `find`, `pad_left`, `lines` |
+| `list`    | `sort`, `sorted`, `unique`, `slice`, `sum`, `first`, `remove` |
+| `logic`   | `is_number`, `is_empty`, `all`, `any` |
+| `convert` | `to_binary`, `to_hex`, `parse_number`, `format_number` |
+| `error`   | `warn`, `debug`, `assert_equal` |
+| `system`  | `args`, `exit`, `env`, `platform`, `clock` |
+| `file`    | `read_text`, `write_text`, `read_lines`, `list_dir` |
+| `time`    | `now`, `sleep`, `format_duration` |
+| `date`    | `make_date`, `parse`, `format`, `add_days`, `diff_days` |
+
+`import text` hides the old built-in `text(x)` in that file; use `to_text(x)` (the
+recommended name) or `import text as t`.
+
+Full details: [Standard library](08-standard-library.md).
+
 ## Where next
 
 * Exact rules and grammar: [Language reference](03-language-reference.md)
 * Every built-in: [Built-in spells](04-builtins.md)
+* The standard modules: [Standard library](08-standard-library.md)
 * Ready-made programs: [Cookbook](06-cookbook.md)

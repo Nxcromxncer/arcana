@@ -47,14 +47,17 @@ hide a bug.
 | Code    | Kind              | Catchable | Typical cause                                |
 |---------|-------------------|-----------|----------------------------------------------|
 | `E2001` | `MathError`       | yes       | division by zero, `0 ** -1`                  |
-| `E2002` | `IndexError`      | yes       | list/text/range index out of range, `pop([])`|
+| `E2002` | `IndexError`      | yes       | list/text/range index out of range, `pop([])`, `first([])`, a bad `slice` / `substring` |
 | `E2005` | `KeyError`        | yes       | reading a map key that is not there          |
-| `E2006` | `ValueError`      | yes       | `range(1, 5, 0)`                             |
-| `E2008` | `MathError`       | yes       | result too large, or not a real number       |
+| `E2006` | `ValueError`      | yes       | `range(1, 5, 0)`, an impossible date, `clamp(1, 5, 2)`, `remove` of a missing item |
+| `E2008` | `MathError`       | yes       | result too large, `sqrt(-1)`, `log(0)`, a date outside years 1-9999 |
 | `E2010` | `InputError`      | yes       | `ask_integer` got non-numeric text; no input left |
-| `E2011` | `ConversionError` / `ValueError` | yes | `integer("x")`, `integer(3.5)`, `split(s, "")` |
+| `E2012` | `FileError`       | yes       | a `file` function failed (missing file, no permission, ...) |
+| `E2011` | `ConversionError` / `ValueError` | yes | `integer("x")`, `integer(3.5)`, `split(s, "")`, `date.parse("nope")`, `from_hex("zz")` |
 | `E2100` | `UserError`       | yes       | you called `fail("...")`                     |
+| `E2101` | `AssertionError`  | yes       | `assert`, `assert_true` or `assert_equal` failed |
 | `E2004`, `E2007`, `E2009` | - | no        | no `main`, call depth, step limit            |
+| (`system.exit`)  | -  | no        | ends the program on purpose; `finally` still runs |
 | every `E1xxx`, `E3xxx`, `E4xxx`, `E5xxx` | - | no | fix the code                       |
 
 In a `catch` clause the variable is a map:
@@ -129,7 +132,9 @@ help: use 'not' for negation and '!=' for inequality
 | `E2009` | `Step limit of N exceeded`                          | The program ran past `--max-steps`. |
 | `E2010` | `"abc" is not a valid integer` / `No input available (end of input reached)` | Catch it around `ask_integer`/`ask_decimal`/`ask`. |
 | `E2011` | `Cannot convert "x" to integer` / `... without losing its fraction` / `split() separator cannot be empty` | Validate the text, or use `round(x)` for decimals. |
+| `E2012` | `Cannot read 'x.txt': No such file or directory`    | A `file` function failed; the message carries the operating system's reason. Check the path with `file.exists`, or catch the error. |
 | `E2100` | *your message*                                      | Raised by `fail(...)`. |
+| `E2101` | `Assertion failed` / `Assertion failed: 1 is not equal to 2` | An `assert*` call found something wrong; fix the data or the code it checks. |
 
 ```
 error E2002: Index 5 is out of range for a list of length 2
@@ -148,7 +153,7 @@ help: valid indexes run from 0 to length - 1
 | `E3002` | `'a' is already declared in this scope`                    | Assign (`a = ...`) instead of `bind` again. Also: duplicate parameter names, and assigning to a built-in (`Cannot assign to built-in 'length'`). |
 | `E3003` | `Cannot use '+' with text and integer`                     | Wrong type for an operation: arithmetic on non-numbers, comparing unlike types, indexing a non-collection, bad map key, looping over a non-collection, wrong argument type to a built-in. Convert explicitly with `text()`, `integer()`, `decimal()`. |
 | `E3004` | `Spell 'add' expects 2 arguments but got 1`                | Match the parameter list; the help shows the signature. Note `main` takes no arguments. |
-| `E3005` | `Cannot call a value of type integer`                      | Only spells can be called. |
+| `E3005` | `Cannot call a value of type integer`                      | Only spells can be called. If the type is `grimoire`, you probably wrote `text(5)` after `import text`: the import hides the built-in, so use `to_text(5)` or `import text as t`. |
 
 ```
 error E3003: Cannot use '+' with text and integer
@@ -188,13 +193,16 @@ real mistake, because that is where the parser noticed. Look upward.
 |---------|------------------------------------------|---------------|
 | `E5001` | `Cannot find grimoire 'nothere'`         | The `.arc` file is not next to the importing file or on `ARCANA_PATH`. The `note:` lists every folder searched. |
 | `E5002` | `Cyclic import of 'a2'`                  | Two grimoires import each other. Move the shared code into a third file. |
-| `E5003` | `Grimoire 'ok' has no name 'zzz'`        | Misspelled name in `from m import ...` or `m.name`. |
+| `E5003` | `Grimoire 'ok' has no name 'zzz'`        | Misspelled name in `from m import ...` or `m.name`. For close names the help says `did you mean 'sqrt'?`. |
 
 ## Debugging toolkit
 
 * **`arcana check file.arc`** finds syntax errors, unknown names and duplicate
   declarations in one pass without running anything, and reports *all* name
   problems at once (the interpreter stops at the first).
+* **`error.debug(x)`** prints `debug: value (type)` to standard error, so it never mixes
+  with your program's output. `error.warn("...")` does the same for warnings, and
+  `assert(condition, "message")` documents what you expect to be true.
 * **`cast` is your print debugger.** `cast type_of(x)` and `cast x` quickly
   reveal surprises. Lists and maps print with quotes around nested text, so
   `["1"]` and `[1]` look different.

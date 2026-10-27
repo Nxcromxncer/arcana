@@ -15,7 +15,7 @@
 use crate::ast::{Param, Stmt};
 use crate::environment::{Env, FxBuild};
 use crate::int::Int;
-use crate::runtime::BuiltinId;
+use crate::runtime::NativeFn;
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -46,7 +46,7 @@ impl Spell {
 
 pub struct Builtin {
     pub name: &'static str,
-    pub id: BuiltinId,
+    pub func: NativeFn,
     pub min_args: usize,
     pub max_args: Option<usize>,
 }

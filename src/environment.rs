@@ -103,6 +103,13 @@ impl Env {
         }
     }
 
+    /// Names declared directly in this scope (not in parents).
+    pub fn local_names(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.vars.borrow().keys().cloned().collect();
+        v.sort();
+        v
+    }
+
     pub fn all_names(&self) -> Vec<String> {
         let mut names: Vec<String> = Vec::new();
         let mut cur: Option<&Env> = Some(self);

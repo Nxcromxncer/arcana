@@ -15,7 +15,8 @@ tokens
 AST --+--> checker.rs      `arcana check`: unknown names, redeclarations
       |
       +--> interpreter.rs  `arcana run`: tree-walking evaluation
-                              |-- runtime.rs      built-in spells
+                              |-- runtime.rs      the always-available built-in spells
+                              |-- stdlib/         the ten standard modules (math, text, list, ...)
                               |-- values.rs       Value, Int-backed numbers, maps, ranges
                               +-- environment.rs  scopes
 ```
@@ -37,7 +38,9 @@ AST --+--> checker.rs      `arcana check`: unknown names, redeclarations
 | `int.rs`         | `Int`: `i64` fast path with automatic promotion to `BigInt`; exact int/float comparison; floor division and modulo. |
 | `environment.rs` | `Env`: `Rc` scope chain with a fast hasher. |
 | `interpreter.rs` | Statement execution, expression evaluation, spell calls, imports, `try`/`catch`/`finally`. |
-| `runtime.rs`     | Built-in spells as a `BuiltinId` enum dispatched in `call_builtin`. |
+| `runtime.rs`     | The always-available built-ins (`GLOBALS` table) and the helpers every native function uses: `rt`, `type_err`, `text_arg`, `int_arg`, `list_arg`, `float_arg`, `register`. |
+| `stdlib/mod.rs`  | `MODULES`, `build_module(name)`: creates a standard module value on first import. |
+| `stdlib/*.rs`    | One file per module: `math`, `text`, `list`, `logic`, `convert`, `error`, `system`, `file`, `time`, `date`. Each exposes `register(env)`. |
 | `errors.rs`      | `ArcanaError`, diagnostic rendering, "did you mean" matching (a port of Python's `difflib`). |
 | `cli.rs`         | Argument parsing, exit codes, large-stack execution thread. |
 
@@ -54,6 +57,24 @@ AST --+--> checker.rs      `arcana check`: unknown names, redeclarations
   formatting (`1e+16`, `1.5e-07`) so output is identical to the original
   implementation. Operations that would give infinity or NaN raise `E2008`, so those
   values never exist at runtime.
+* **Native functions.** Every built-in, global or in a standard module, is a plain
+  `fn(&mut Interpreter, &[Value]) -> Result<Value, Box<ArcanaError>>` stored in a
+  `Builtin { name, func, min_args, max_args }`. The interpreter checks the argument
+  count and calls the function; errors the function raises without a span get the call
+  site added.
+* **Standard modules** are ordinary `ModuleValue`s whose scope holds `Builtin` values, so
+  `import math`, `from math import sqrt` and `math.pi` use exactly the same machinery
+  as user grimoires. `load_module` consults `stdlib::build_module` *before* searching
+  the disk, which is why a standard module always wins over a file. Modules are cached
+  per interpreter under the key `std:<name>`.
+* **Exit.** `system.exit(code)` returns an `ArcanaError` whose `exit_code` is set and
+  `recoverable` is false: it travels up like any error (so `finally` runs) but `catch`
+  ignores it, and the CLI turns it into the process status without printing anything.
+* **Randomness** is a SplitMix64 generator inside the `Interpreter`, seeded from the
+  clock; `math.random_seed(n)` makes it deterministic.
+* **Dates** use exact integer calendar arithmetic (days-from-civil), no external crate.
+  The only platform-specific code is `local_offset_at` in `stdlib/date.rs`, which calls
+  `localtime_r` on Unix and returns 0 elsewhere.
 * **Errors** are `Result<T, Box<ArcanaError>>` everywhere (boxed to keep `Result`
   small). `ArcanaError.recoverable` decides whether `try`/`catch` can intercept it.
   Built-ins return errors *without* a span; `call_value` fills in the call site.
@@ -86,7 +107,8 @@ cargo test fizz -- --nocapture          # tests matching a name, with output
 | `tests/lexer.rs`              | tokens, comments, numbers, escapes, lexical errors |
 | `tests/parser.rs`             | precedence trees, syntax errors, reserved words |
 | `tests/interpreter.rs`        | language semantics end to end |
-| `tests/diagnostics_and_cli.rs`| diagnostic format, `check`, exit codes, imports, the real binary |
+| `tests/diagnostics_and_cli.rs`| diagnostic format, `check`, exit codes, imports, the real binary, documented example output |
+| `tests/stdlib.rs`             | every standard module, the 1.0 built-ins, program arguments, `system.exit`, file and date behaviour |
 | `tests/common/mod.rs`         | helpers: run source on a big-stack thread and capture output |
 
 `diagnostics_and_cli.rs` also runs `arcana check` over every file in `examples/`, so
@@ -94,16 +116,28 @@ a broken example fails the test-suite.
 
 ## Recipes for extending the language
 
-### Add a built-in spell
+### Add a spell to a standard module
 
-1. `runtime.rs`: add a variant to `BuiltinId`.
-2. Add its name to `BUILTIN_NAMES` (the array length is part of the type, so
-   update the number) and a row in the `table` inside `make_builtins` (same
-   length rule): `("name", Variant, min_args, Some(max_args))`.
-3. Implement it in the `match` in `call_builtin`. Return
-   `Err(type_err("...").boxed())` for type errors, or
-   `rt("E2xxx", "Kind", "...")` for a catchable runtime error.
-4. Add a test in `tests/interpreter.rs` and a section in `docs/04-builtins.md`.
+1. Open the module's file in `src/stdlib/` (for example `text.rs`).
+2. Write the function: `fn name(it: &mut Interpreter, a: &[Value]) -> R<Value>`. The
+   interpreter has already checked the argument count. Use the helpers from
+   `runtime.rs` to validate arguments (`text_arg("name", &a[0], "text")?`), and return
+   `Err(type_err("...").boxed())` for type errors or
+   `Err(rt("E2xxx", "Kind", "...").boxed())` for a catchable runtime error.
+3. Register it in the module's `register`: `reg(env, "name", min_args, Some(max_args), name);`.
+   Short functions can be a closure: `reg(env, "trim", 1, Some(1), |_, a| ...)`.
+4. Add a test in `tests/stdlib.rs` and a row in `docs/08-standard-library.md`.
+
+### Add an always-available built-in
+
+Same as above, but add a row to the `GLOBALS` table in `runtime.rs`. Think twice:
+everything global is a name users cannot use for their own variables without shadowing.
+
+### Add a new standard module
+
+Create `src/stdlib/<name>.rs` with `pub fn register(env: &Rc<Env>)`, add `pub mod <name>;`
+and the module name to `MODULES` and `build_module` in `stdlib/mod.rs` (mind the array
+length), then document it.
 
 ### Add a keyword
 

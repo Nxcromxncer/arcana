@@ -14,6 +14,7 @@ pub mod interpreter;
 pub mod lexer;
 pub mod parser;
 pub mod runtime;
+pub mod stdlib;
 pub mod tokens;
 pub mod values;
 

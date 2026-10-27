@@ -9,7 +9,7 @@ use crate::ast::*;
 use crate::errors::{name_help, ArcanaError, Span};
 use crate::lexer::normalize;
 use crate::parser::parse_source;
-use crate::runtime::BUILTIN_NAMES;
+use crate::runtime::{builtin_names, is_builtin};
 use std::collections::HashSet;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -45,7 +45,7 @@ impl Checker {
     }
 
     fn visible(&self) -> Vec<String> {
-        let mut names: HashSet<String> = BUILTIN_NAMES.iter().map(|s| s.to_string()).collect();
+        let mut names: HashSet<String> = builtin_names().into_iter().collect();
         for s in &self.scopes {
             names.extend(s.iter().cloned());
         }
@@ -168,7 +168,7 @@ impl Checker {
     }
 
     fn resolve(&mut self, name: &str, span: Span, assign: bool) {
-        if BUILTIN_NAMES.contains(&name) || self.scopes.iter().any(|s| s.contains(name)) {
+        if is_builtin(name) || self.scopes.iter().any(|s| s.contains(name)) {
             return;
         }
         let help = name_help(name, &self.visible(), assign);
