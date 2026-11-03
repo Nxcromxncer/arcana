@@ -1,6 +1,6 @@
 # Arcana 1.0
 
-A fantasy-inspired general-purpose programming language with a tree-walking
+A general-purpose programming language with a tree-walking
 interpreter written in Rust. Arcana 1.0 completes the core language and adds a
 **standard library** of ten modules (`math`, `text`, `list`, `logic`, `convert`,
 `error`, `system`, `file`, `time`, `date`), so real programs (command-line tools,
