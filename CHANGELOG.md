@@ -1,5 +1,34 @@
 # Changelog
 
+## Candy Tier I (library, interpreter unchanged)
+
+New: [`candy/`](candy/README.md), a pure-Arcana data-structures library in
+four modules, loaded with `import candy` (aggregator `candy.arc`) or
+individually (`import candy.structures`, `candy.trees`, `candy.collections`,
+`candy.graphs`). No interpreter changes; every structure is a closure object
+with a `"kind"` tag, and misuse raises catchable `AssertionError` with a
+`Candy:` message.
+
+* **candy.structures** — Stack, Queue, Deque, CircularQueue, PriorityQueue
+  (stable ties), MonotonicStack, MonotonicQueue, MinStack, MaxStack.
+* **candy.trees** — Binary Tree (complete), BST (iterative), AVL, Red-Black
+  (insert + delete, `is_valid`), Binary Heap (+ `binary_heap_from`),
+  Trie, Segment Tree (range sum), Fenwick Tree, B-Tree and B+ Tree
+  (insert/delete/`is_valid`), Suffix Array (suffix-tree queries), Treap
+  (seedable).
+* **candy.collections** — Dynamic Array, Singly/Doubly Linked Lists, HashMap
+  and HashSet (real buckets, rehashing, insertion-order keys), Ordered
+  Map/Set, DSU, Bloom Filter, O(1) LRU Cache, LFU Cache, Skip List.
+* **candy.graphs** — `graph` (weighted, directed/undirected,
+  adjacency-list/matrix/edge views) plus free spells: `bfs`, `dfs`, `path`,
+  `dijkstra`, `shortest_path`, `connected_components`, `has_cycle`,
+  `is_bipartite`/`bipartite_partition`, `topological_sort`, `scc`. All
+  iterative — safe at any size under the default `--max-depth`.
+
+Tests: `candy/test_structures.arc`, `test_trees.arc`, `test_collections.arc`,
+`test_graphs.arc` each end with `ALL ... TESTS PASSED`. Guides in
+`candy/docs/01`–`04`.
+
 ## 1.0.0
 
 Arcana 1.0 completes the core language with a standard library. The 0.1 language is

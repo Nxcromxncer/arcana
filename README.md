@@ -115,6 +115,33 @@ Full guides live in [`docs/`](docs/README.md):
 | [Internals](docs/07-internals.md) | for contributors |
 | [Cheat sheet](docs/cheatsheet.md) | one page |
 
+## Candy: the standard data-structures library
+
+[`candy/`](candy/README.md) is a pure-Arcana library of classic data
+structures and algorithms, layered on the core language and standard modules
+with no interpreter changes:
+
+| Module | Provides |
+|---|---|
+| `candy.structures` | Stack, Queue, Deque, CircularQueue, PriorityQueue, MonotonicStack/Queue, MinStack/MaxStack |
+| `candy.trees` | Binary Tree, BST, AVL, Red-Black, Binary Heap, Trie, Segment Tree, Fenwick Tree, B-Tree, B+ Tree, Suffix Array, Treap |
+| `candy.collections` | Dynamic Array, Singly/Doubly Linked Lists, HashMap, HashSet, Ordered Map/Set, DSU, Bloom Filter, LRU/LFU Cache, Skip List |
+| `candy.graphs` | Weighted directed/undirected graphs, BFS/DFS, shortest paths, Dijkstra, components, cycle detection, bipartite checking, topological sort, SCC |
+
+```arc
+import candy
+
+spell main() {
+    bind pq = candy.structures.priority_queue()
+    pq["push"]("alarm", 1)
+    cast pq["pop"]()                       ? alarm
+}
+```
+
+`import candy` loads every module; `import candy.structures` loads one; the
+per-module test grimoires (`candy/test_*.arc`) print `ALL ... TESTS PASSED`.
+Full guides in [`candy/docs/`](candy/docs/README.md).
+
 ## Source layout
 
 ```
@@ -131,6 +158,8 @@ src/
   values.rs       environment.rs runtime values, scopes
   int.rs                         arbitrary-precision integers with an i64 fast path
   errors.rs                      diagnostics (E1xxx-E6xxx), "did you mean" suggestions
+candy/            the Candy data-structures library (pure .arc, see candy/README.md)
+candy.arc         Candy's aggregator grimoire: `import candy`
 tests/            lexer, parser, interpreter semantics, diagnostics, CLI, imports
 examples/         runnable programs
 ```
